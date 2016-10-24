@@ -1,6 +1,22 @@
 #include <Arduino.h>
 #include "moje.h"
 
+// Rele
+Rele::Rele(int pin, boolean _reverse = false):rele_pin(pin){
+  setReverse(_reverse);
+  pinMode(rele_pin, OUTPUT);
+  off();
+}
+void Rele::on(){
+  if(reverse) digitalWrite(rele_pin,LOW);
+  else digitalWrite(rele_pin,HIGH);
+}
+void Rele::off(){
+  if(reverse) digitalWrite(rele_pin,HIGH);
+  else digitalWrite(rele_pin,LOW);
+}
+boolean Rele::state(){return digitalRead(rele_pin);}
+
 //#define MY_CRON_INTERVALms  90000/AVG_LEN
 #define MY_CRON_INTERVALms  9000/AVG_LEN
 

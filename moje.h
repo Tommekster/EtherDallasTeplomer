@@ -7,11 +7,14 @@
 // Rele
 class Rele{
   const int rele_pin;
-  public:
-  Rele(int pin);
+  boolean reverse;  
+public:
+  Rele(int pin, boolean reverse = false);
   void on();
   void off();
-  void state();
+  boolean state();
+  void setReverse(boolean v){reverse = v;}
+  boolean isReverse(){return reverse;}
 }
 
 class AnalogIN{
