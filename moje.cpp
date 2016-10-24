@@ -3,7 +3,7 @@
 #include "moje.h"
 
 // Rele
-Rele::Rele(int pin, boolean _reverse = false):rele_pin(pin){
+Rele::Rele(int pin, boolean _reverse):rele_pin(pin){
   setReverse(_reverse);
   pinMode(rele_pin, OUTPUT);
   off();
@@ -27,6 +27,9 @@ String Teplomer::componentName(){
       return "DS18B20";
     case 0x22:
       return "DS1822";
+    default:
+      return "Unknown";
+  }
 }
 void Teplomer::startConversion(){
   reset();

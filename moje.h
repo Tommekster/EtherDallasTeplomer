@@ -1,3 +1,12 @@
+#ifndef MOJE_H
+#define MOJE_H
+
+#include <Arduino.h>
+#include <OneWire.h>
+
+#ifndef OneWire_h
+#error OneWire chybi
+#endif
 
 #define AVG_LEN  8
 
@@ -15,10 +24,12 @@ public:
   boolean state();
   void setReverse(boolean v){reverse = v;}
   boolean isReverse(){return reverse;}
-}
+};
 
 // Dallas Temperature DS18x20
-class Teplomer : public OneWire{
+class OneWire;
+class Teplomer : public OneWire
+{
   byte addr[8];
   byte data[12];
   boolean tempValid;
@@ -37,7 +48,7 @@ public:
   void readData();
   void computeTemperature();
   float getTemperature(){return celsius;}
-}
+};
 
 class AnalogIN{
   private:
@@ -56,3 +67,5 @@ class AnalogIN{
   unsigned int get(int i);
   void cron();
 };
+
+#endif

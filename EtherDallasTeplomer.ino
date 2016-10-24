@@ -2,6 +2,7 @@
 #include "EtherShield.h"
 #include <stdio.h>
 #include <Time.h>
+#include <OneWire.h>
 #include "moje.h"
 
 /*
