@@ -4,6 +4,16 @@
 //#define SENSBUF_LEN  AVG_LEN*7+1  // 4*6 + 2
 #define SENSBUF_LEN  64  // 4*6 + 2
 
+// Rele
+class Rele{
+  const int rele_pin;
+  public:
+  Rele(int pin);
+  void on();
+  void off();
+  void state();
+}
+
 class AnalogIN{
   private:
   unsigned int *sensbuf;

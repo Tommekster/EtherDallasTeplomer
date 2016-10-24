@@ -1,6 +1,4 @@
 #include <Arduino.h>
-//#include <avr/wdt.h>
-#include "wdt.h"
 #include "moje.h"
 
 //#define MY_CRON_INTERVALms  90000/AVG_LEN
@@ -60,15 +58,12 @@ void AnalogIN::read5V(){
   sensbuf[5*AVG_LEN+index] = analogRead(A5);
   sensbuf[7*AVG_LEN] = analogRead(A6);    // vol
   
-  wdt_reset();
   analogReference(INTERNAL);
   while(analogRead(A6)>600) delay(100);
   //analogRead(A6);    // vol
   //analogRead(A6);    // vol
   delay(100);
   sensbuf[6*AVG_LEN+index] = analogRead(A6);    // vol
-  
-  wdt_reset();
   
   analogReference(DEFAULT);
   analogRead(A6);    // vol
@@ -91,21 +86,18 @@ unsigned int AnalogIN::get(int i){
   }
 }
 void AnalogIN::initDiv(){
-  wdt_reset();
   
   analogReference(DEFAULT);
   delay(500);
   sensbuf[24] = analogRead(A6);    // vol
   delay(500);
   sensbuf[24] = analogRead(A6);    // vol
-  wdt_reset();
   
   analogReference(INTERNAL);
   delay(500);
   sensbuf[25] = analogRead(A6);    // vol
   delay(500);
   sensbuf[25] = analogRead(A6);    // vol
-  wdt_reset();
   
   analogReference(DEFAULT);
   analogRead(A6);    // vol

@@ -2,8 +2,6 @@
 #include "EtherShield.h"
 #include <stdio.h>
 #include <Time.h>
-//#include <avr/wdt.h>
-#include "wdt.h"
 #include "moje.h"
 
 /*
@@ -138,7 +136,6 @@ void setup(){
   // RELE
   pinMode(RELE, OUTPUT);
   
-  wdt_enable(WDTO_8S);
   //Serial.begin(9600);
 }
 
@@ -149,7 +146,6 @@ void loop(){
 
   last_tcp_time=millis();
   while(1) {
-    wdt_reset();
     
     // read packet, handle ping and wait for a tcp packet:
     dat_p=es.ES_packetloop_icmp_tcp(buf,es.ES_enc28j60PacketReceive(BUFFER_SIZE, buf));
