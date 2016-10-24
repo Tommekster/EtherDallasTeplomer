@@ -113,12 +113,13 @@ uint16_t print_sens(uint8_t *buf)
 void setup(){
   es_init();
   tempSen.DSsearch(); // I hope it finds at least 1st sensor
-  //Serial.begin(9600);
+  Serial.begin(9600);
 }
 
 void loop(){
   uint16_t plen, dat_p;
   unsigned long timer1;
+  int state = 0;
   unsigned long last_tcp_time;
 
   timer1 = millis(); // reset "timer"
@@ -133,12 +134,24 @@ void loop(){
     if(dat_p==0){
       // no http request; It has time for own work, anyone wants nothing
       // Measure temperature in to steps (1. prepare, 2.read)
-      if((millis()-timer1) > 1000){ // maybe 750ms is enough, maybe not
-        // Start measure temperature
-        tempSen.startConversion();
-      }else{
-        tempSen.readData();
-        timer1 = millis(); // reset "timer"
+      switch(state){
+        case 0: // begin temperature measuring
+          // Start measure temperature
+          tempSen.startConversion();
+          Serial.println("Spoustim mereni");
+          timer1 = millis(); // reset "timer"
+          state++;
+          break;
+        case 1: // wait: // maybe 750ms is enough, maybe not
+          if((millis() - timer1) > 1000) state++;
+          break;
+        case 2:
+          tempSen.readData();
+          Serial.println("Ctu mereni");
+          state++;
+          break;
+        default:
+          state = 0;
       }
       
       if((millis()-last_tcp_time) > ES_MAX_LAST_TIMEms){
@@ -147,6 +160,7 @@ void loop(){
       
       continue;
     }
+    Serial.println("Packet");
     last_tcp_time=millis();
     // tcp port 80 begin
     if (strncmp("GET ",(char *)&(buf[dat_p]),4)!=0){
