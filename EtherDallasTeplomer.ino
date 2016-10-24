@@ -59,40 +59,49 @@ uint16_t http200ok(void)
 }
 
 uint16_t prepareTemperature(uint8_t *buf, uint16_t plen){
-  sprintf(myBuff,"%5.2dC",tempSen.getTemperature());
+  float temp = tempSen.getTemperature();
+  uint16_t units = (uint16_t)temp;
+  byte cents = (byte) (temp*100) %100;
+  byte dec = cents / 10;
+  byte cent = cents % 10;
+  sprintf(myBuff,"%d.%d%dC",units,dec,cent);
   plen=es.ES_fill_tcp_data(buf,plen,myBuff);
 }
 // prepare the webpage by writing the data to the tcp send buffer
 uint16_t print_webpage(uint8_t *buf) // vlidna tvar 
 {
+  // be carefull about long page
   uint16_t plen;
   plen=http200ok();
   // Header
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<html><head><title>Kotelnik V1.3</title></head><body><table>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<tr><th>RELE0</th><th>RELE1</th><th>Dallas</th></tr>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<tr><td><a href=/rele0/on>ON</a></td><td><a href=/rele1/on>ON</a></td><td></td></tr>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<tr><td><a href=/rele0/off>OFF</a></td><td><a href=/rele1/off>OFF</a></td><td></td></tr>"));
-  // RELEs, Dallas status...
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<tr><td>"));
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<html><head><title>Kotelnik V1.3</title></head><body>"));
+  // Relay 0
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<p>RELE0("));
   if(rele0.state())
     plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("isOn"));
   else
     plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("isOff"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</td><td>"));
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR(")<a href=/rele0/on>ON</a>|<a href=/rele0/off>OFF</a></p>"));
+  
+  // Relay 1
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<p>RELE1("));
   if(rele1.state())
     plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("isOn"));
   else
     plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("isOff"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</td><td>"));
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR(")<a href=/rele1/on>ON</a>|<a href=/rele1/off>OFF</a></p>"));
+  
+  // Dallas Temperature sensor
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<p>Dallas("));
   plen=prepareTemperature(buf,plen);
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR(")</p><hr>"));
   // Footer
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</td></tr></table><br><hr>"));
   plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("V1.3 <a href=\"https://github.com/Tommekster/EtherDallasTeplomer\">github.com/Tommekster/EtherDallasTeplomer</a>"));
   plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</body></html>"));
 
   return(plen);
 }
-uint16_t print_toindex(uint8_t *buf) // Redirecs 
+uint16_t print_toindex(uint8_t *buf)
 {
   uint16_t plen;
   plen=http200ok();
@@ -129,16 +138,26 @@ void loop(){
     // read packet, handle ping and wait for a tcp packet:
     dat_p=es.ES_packetloop_icmp_tcp(buf,es.ES_enc28j60PacketReceive(BUFFER_SIZE, buf));
 
+    if(dat_p != 0) {
+      Serial.print("Datovy paket: ");
+      Serial.println(dat_p);
+      for(uint16_t i = 0; i < dat_p; i++){
+        Serial.print(buf[i],HEX);
+        Serial.print(" ");
+      }
+      Serial.println(" ");
+    }
+
     /* dat_p will be unequal to zero if there is a valid 
      * http get */
-    if(dat_p==0){
+    if(dat_p == 0){
       // no http request; It has time for own work, anyone wants nothing
       // Measure temperature in to steps (1. prepare, 2.read)
       switch(state){
         case 0: // begin temperature measuring
           // Start measure temperature
           tempSen.startConversion();
-          Serial.println("Spoustim mereni");
+          //Serial.println("Spoustim mereni");
           timer1 = millis(); // reset "timer"
           state++;
           break;
@@ -147,16 +166,16 @@ void loop(){
           break;
         case 2:
           tempSen.readData();
-          Serial.println("Ctu mereni");
+          //Serial.println("Ctu mereni");
           state++;
           break;
         default:
           state = 0;
       }
       
-      if((millis()-last_tcp_time) > ES_MAX_LAST_TIMEms){
+      /*if((millis()-last_tcp_time) > ES_MAX_LAST_TIMEms){
         // Co se stane, kdyz nebude dlouho pod dozorem?
-      }
+      }*/
       
       continue;
     }
@@ -191,13 +210,18 @@ void loop(){
           relay = &rele1;
           break;
         default:
-          goto BADREQUEST;
+          //goto BADREQUEST;
+          dat_p=es.ES_fill_tcp_data_p(buf,0,PSTR("HTTP/1.0 400 Bad Request\r\nContent-Type: text/html\r\n\r\n<h1>400 Bad Request</h1>"));
+          goto SENDTCP;
       }
       // What is it going to do? (on/off)
       if(strncmp("/on ", (char *)&(buf[dat_p+4+6]), 4)==0) relay->on();
       else if(strncmp("/off ", (char *)&(buf[dat_p+4+6]), 5)==0) relay->off();
       else if(strncmp("/toggle ", (char *)&(buf[dat_p+4+6]), 8)==0) relay->toggle();
-      else goto BADREQUEST;
+      else {
+        dat_p=es.ES_fill_tcp_data_p(buf,0,PSTR("HTTP/1.0 400 Bad Request\r\nContent-Type: text/html\r\n\r\n<h1>400 Bad Request</h1>"));
+        goto SENDTCP;
+      }
       dat_p=print_toindex(buf);
       goto SENDTCP;
     }
@@ -205,12 +229,13 @@ void loop(){
       dat_p=es.ES_fill_tcp_data_p(buf,0,PSTR("HTTP/1.0 401 Unauthorized\r\nContent-Type: text/html\r\n\r\n<h1>401 Unauthorized</h1>"));
       goto SENDTCP;
     }
-BADREQUEST:
-    dat_p=es.ES_fill_tcp_data_p(buf,0,PSTR("HTTP/1.0 400 Bad Request\r\nContent-Type: text/html\r\n\r\n<h1>400 Bad Request</h1>"));
+//BADREQUEST 
+//    dat_p=es.ES_fill_tcp_data_p(buf,0,PSTR("HTTP/1.0 400 Bad Request\r\nContent-Type: text/html\r\n\r\n<h1>400 Bad Request</h1>"));
+
 SENDTCP:
     es.ES_www_server_reply(buf,dat_p); // send web page data
     // tcp port 80 end
-
+    Serial.println("Reply");
   }
 
 }
