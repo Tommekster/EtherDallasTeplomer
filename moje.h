@@ -17,6 +17,28 @@ public:
   boolean isReverse(){return reverse;}
 }
 
+// Dallas Temperature DS18x20
+class Teplomer : public OneWire{
+  byte addr[8];
+  byte data[12];
+  boolean tempValid;
+  float celsius;
+  
+  boolean isType_s(){return addr[0]==0x10;}
+  
+public:
+  Teplomer(int pin):OneWire(pin),tempValid(false){}
+  boolean DSsearch(){return search(addr);}
+  // reset_search();
+  // delay(250);
+  boolean isAddrValidCRC(){return OneWire::crc8(addr, 7) == addr[7];}
+  String componentName();
+  void startConversion();
+  void readData();
+  void computeTemperature();
+  float getTemperature(){return celsius;}
+}
+
 class AnalogIN{
   private:
   unsigned int *sensbuf;
