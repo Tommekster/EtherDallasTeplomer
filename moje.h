@@ -21,6 +21,7 @@ public:
   Rele(int pin, boolean reverse = false);
   void on();
   void off();
+  void toggle();
   boolean state();
   void setReverse(boolean v){reverse = v;}
   boolean isReverse(){return reverse;}
@@ -47,7 +48,7 @@ public:
   void startConversion();
   void readData();
   void computeTemperature();
-  float getTemperature(){return celsius;}
+  float getTemperature(){if(!tempValid) computeTemperature(); return celsius;}
 };
 
 class AnalogIN{

@@ -1,7 +1,7 @@
 // EtherShield webserver demo
 #include "EtherShield.h"
-#include <stdio.h>
-#include <Time.h>
+#include <stdio.h> // sprintf
+#include <Time.h>  // day, hour, minute, ... // useless
 #include <OneWire.h>
 #include "moje.h"
 
@@ -15,11 +15,9 @@ SO to Arduino Digital Pin 12
 SCK to Arduino Digital Pin 13
 */
 
-
-#define RELE    6
-
-void parseLong(char *str, unsigned long &num);
-//void readSens(int* sens);
+#define DS1820  4
+#define RELE0   6
+#define RELE1   7
 
 // please modify the following two lines. mac and ip have to be unique
 // in your local area network. You can not have the same numbers in
@@ -33,12 +31,14 @@ static uint8_t myip[4] = {
 #define MYWWWPORT 80
 #define BUFFER_SIZE 550
 #define ES_MAX_LAST_TIMEms  200000
+
+// Relays and tempSens
+Rele rele0(RELE0);
+Rele rele1(RELE1);
+Teplomer tempSen(DS1820);
+
 static uint8_t buf[BUFFER_SIZE+1];
 static char myBuff[11];
-static unsigned int  sensBuf[SENSBUF_LEN];  // 6 Temps + 2 Vref
-
-// Analog Inputs
-AnalogIN sens=AnalogIN(sensBuf);
 
 // The ethernet shield
 EtherShield es=EtherShield();
@@ -58,25 +58,41 @@ uint16_t http200ok(void)
   return(es.ES_fill_tcp_data_p(buf,0,PSTR("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nPragma: no-cache\r\n\r\n")));
 }
 
+uint16_t prepareTemperature(uint8_t *buf, uint16_t plen){
+  sprintf(myBuff,"%5.2dC",tempSen.getTemperature());
+  plen=es.ES_fill_tcp_data(buf,plen,myBuff);
+}
 // prepare the webpage by writing the data to the tcp send buffer
-uint16_t print_webpage(uint8_t *buf)
+uint16_t print_webpage(uint8_t *buf) // vlidna tvar 
 {
   uint16_t plen;
   plen=http200ok();
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<html><head><title>Kotelnik V1.0</title></head><body>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<center><h1>Welcome to Arduino ENC28J60 Ethernet Shield V1.0</h1>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<hr><br>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<br><a href=/on>ON</a>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<br><a href=/off>OFF</a>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<br> Read digital analog inputs HERE"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<br>") );
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</center><hr>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("V1.0 <a href=\"http://blog.thiseldo.co.uk\">blog.thiseldo.co.uk</a>"));
+  // Header
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<html><head><title>Kotelnik V1.3</title></head><body><table>"));
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<tr><th>RELE0</th><th>RELE1</th><th>Dallas</th></tr>"));
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<tr><td><a href=/rele0/on>ON</a></td><td><a href=/rele1/on>ON</a></td><td></td></tr>"));
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<tr><td><a href=/rele0/off>OFF</a></td><td><a href=/rele1/off>OFF</a></td><td></td></tr>"));
+  // RELEs, Dallas status...
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<tr><td>"));
+  if(rele0.state())
+    plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("isOn"));
+  else
+    plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("isOff"));
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</td><td>"));
+  if(rele1.state())
+    plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("isOn"));
+  else
+    plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("isOff"));
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</td><td>"));
+  plen=prepareTemperature(buf,plen);
+  // Footer
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</td></tr></table><br><hr>"));
+  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("V1.3 <a href=\"https://github.com/Tommekster/EtherDallasTeplomer\">github.com/Tommekster/EtherDallasTeplomer</a>"));
   plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</body></html>"));
 
   return(plen);
 }
-uint16_t print_toindex(uint8_t *buf)
+uint16_t print_toindex(uint8_t *buf) // Redirecs 
 {
   uint16_t plen;
   plen=http200ok();
@@ -85,67 +101,28 @@ uint16_t print_toindex(uint8_t *buf)
 
   return(plen);
 }
-uint16_t print_datetime(uint8_t *buf)
+uint16_t print_sens(uint8_t *buf) 
 {
   uint16_t plen;
   plen=http200ok();
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<html><head><title>Kotelnik Date/Time</title></head><body><div>"));
-  sprintf(myBuff,"%d",hour());
-  plen=es.ES_fill_tcp_data(buf,plen,myBuff);
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR(":"));
-  sprintf(myBuff,"%d",minute());
-  plen=es.ES_fill_tcp_data(buf,plen,myBuff);
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR(" "));
-  sprintf(myBuff,"%d",day());
-  plen=es.ES_fill_tcp_data(buf,plen,myBuff);
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("."));
-  sprintf(myBuff,"%d",month());
-  plen=es.ES_fill_tcp_data(buf,plen,myBuff);
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("."));
-  sprintf(myBuff,"%d",year());
-  plen=es.ES_fill_tcp_data(buf,plen,myBuff);
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR(" DoW:"));
-  sprintf(myBuff,"%d",dayOfWeek(now()));
-  plen=es.ES_fill_tcp_data(buf,plen,myBuff);
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</div>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</body></html>"));
-
-  return(plen);
-}
-uint16_t print_sens(uint8_t *buf)
-{
-  uint16_t plen;
-  //readSens(sens);
-  
-  plen=http200ok();
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("<html><head><title>Kotelnik Senzory</title></head><body><h2>Senzory</h2><pre>\n"));
-  for(int i=0; i<8; i++){
-    sprintf(myBuff,"%d",sens.get(i));
-    plen=es.ES_fill_tcp_data(buf,plen,myBuff);
-    plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("\n"));
-  }
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</pre><hr>"));
-  plen=es.ES_fill_tcp_data_p(buf,plen,PSTR("</body></html>"));
-
+  plen=prepareTemperature(buf,plen);
   return(plen);
 }
 
 
 void setup(){
   es_init();
-  
-  // RELE
-  pinMode(RELE, OUTPUT);
-  
+  tempSen.DSsearch(); // I hope it finds at least 1st sensor
   //Serial.begin(9600);
 }
 
 void loop(){
   uint16_t plen, dat_p;
-  unsigned long pctime;
+  unsigned long timer1;
   unsigned long last_tcp_time;
 
-  last_tcp_time=millis();
+  timer1 = millis(); // reset "timer"
+  last_tcp_time = millis();
   while(1) {
     
     // read packet, handle ping and wait for a tcp packet:
@@ -154,13 +131,18 @@ void loop(){
     /* dat_p will be unequal to zero if there is a valid 
      * http get */
     if(dat_p==0){
-      // no http request
-      sens.cron();
+      // no http request; It has time for own work, anyone wants nothing
+      // Measure temperature in to steps (1. prepare, 2.read)
+      if((millis()-timer1) > 1000){ // maybe 750ms is enough, maybe not
+        // Start measure temperature
+        tempSen.startConversion();
+      }else{
+        tempSen.readData();
+        timer1 = millis(); // reset "timer"
+      }
       
       if((millis()-last_tcp_time) > ES_MAX_LAST_TIMEms){
-        //es.ES_enc28j60PowerDown();
-        //es_init();
-        delay(30000); // Nasere hlidaciho psa
+        // Co se stane, kdyz nebude dlouho pod dozorem?
       }
       
       continue;
@@ -174,43 +156,43 @@ void loop(){
       goto SENDTCP;
     }
     // just one web page in the "root directory" of the web server
-    if (strncmp("/ ",(char *)&(buf[dat_p+4]),2)==0){
+    if (strncmp("/ ", (char *)&(buf[dat_p+4]), 2) == 0){
       dat_p=print_webpage(buf);
       goto SENDTCP;
     }
-    else if (strncmp("/on ",(char *)&(buf[dat_p+4]),4)==0){
-      dat_p=print_toindex(buf);
-      digitalWrite(RELE, HIGH);
-      goto SENDTCP;
-    }
-    else if (strncmp("/off ",(char *)&(buf[dat_p+4]),5)==0){
-      dat_p=print_toindex(buf);
-      digitalWrite(RELE, LOW);
-      goto SENDTCP;
-    }
-    else if (strncmp("/set/T",(char *)&(buf[dat_p+4]),6)==0){
-      for(int i=0;i<11;i++) myBuff[i]=((char*)buf)[dat_p+4+6+i];
-      myBuff[11]=0;
-      
-      if(myBuff[0]>'9' || myBuff[0]<'0') continue;
-      
-      dat_p=print_toindex(buf);
-      parseLong(myBuff, pctime);
-      setTime(pctime); // 
-      goto SENDTCP;
-    }
-    else if (strncmp("/time ",(char *)&(buf[dat_p+4]),6)==0){
-      dat_p=print_datetime(buf);
-      goto SENDTCP;
-    }
-    else if (strncmp("/sens ",(char *)&(buf[dat_p+4]),6)==0){
+    // just temperature
+    else if (strncmp("/temp ", (char *)&(buf[dat_p+4]), 6) == 0){
       dat_p=print_sens(buf);
+      goto SENDTCP;
+    }
+    // control RELAYS
+    else if (strncmp("/rele", (char *)&(buf[dat_p+4]), 5)==0){
+      // Whitch Relay is it going to control
+      Rele *relay;
+      switch(buf[dat_p+4+5]){ // relay number
+        case '0':
+          relay = &rele0;
+          break;
+        case '1':
+          relay = &rele1;
+          break;
+        default:
+          goto BADREQUEST;
+      }
+      // What is it going to do? (on/off)
+      if(strncmp("/on ", (char *)&(buf[dat_p+4+6]), 4)==0) relay->on();
+      else if(strncmp("/off ", (char *)&(buf[dat_p+4+6]), 5)==0) relay->off();
+      else if(strncmp("/toggle ", (char *)&(buf[dat_p+4+6]), 8)==0) relay->toggle();
+      else goto BADREQUEST;
+      dat_p=print_toindex(buf);
       goto SENDTCP;
     }
     else{
       dat_p=es.ES_fill_tcp_data_p(buf,0,PSTR("HTTP/1.0 401 Unauthorized\r\nContent-Type: text/html\r\n\r\n<h1>401 Unauthorized</h1>"));
       goto SENDTCP;
     }
+BADREQUEST:
+    dat_p=es.ES_fill_tcp_data_p(buf,0,PSTR("HTTP/1.0 400 Bad Request\r\nContent-Type: text/html\r\n\r\n<h1>400 Bad Request</h1>"));
 SENDTCP:
     es.ES_www_server_reply(buf,dat_p); // send web page data
     // tcp port 80 end
